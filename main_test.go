@@ -3,6 +3,7 @@ package uiuscraper
 import "testing"
 
 func TestGetNotice(t *testing.T) {
+	// lastID := "d1f004b05d7b18de19b4761b9b3d8d0206eca517220fee582766f891adb3f35f"
 
 	notice := ScrapUIU(nil)
 	if len(notice) == 0 {

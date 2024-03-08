@@ -39,7 +39,8 @@ func ScrapUIU(lastNoticeId *string) []Notice {
 
 	c := colly.NewCollector(colly.AllowedDomains(AllowDomain))
 	var notices []Notice
-	stopScraping := false
+	stopNextPage := false
+	page := 1
 
 	c.OnHTML("div[class=notice]", func(e *colly.HTMLElement) {
 		title := e.ChildText("div[class=title] a")
@@ -55,7 +56,7 @@ func ScrapUIU(lastNoticeId *string) []Notice {
 
 		noticeID := GenerateNoticeID(title, parsedTime.String())
 		if noticeID == lastId {
-			stopScraping = true
+			stopNextPage = true
 			return
 		}
 
@@ -76,7 +77,10 @@ func ScrapUIU(lastNoticeId *string) []Notice {
 	})
 
 	c.OnHTML("div[class=nav-links]", func(e *colly.HTMLElement) {
-		if len(notices) == 0 || stopScraping {
+		log.Info().Int("page", page).Msg("Visiting Next Page")
+		page++
+
+		if stopNextPage {
 			return
 		}
 
@@ -93,10 +97,6 @@ func ScrapUIU(lastNoticeId *string) []Notice {
 
 	if len(notices) == 0 {
 		log.Warn().Msg("No notices found")
-	}
-
-	if stopScraping {
-		return nil
 	}
 
 	return notices
