@@ -1,4 +1,4 @@
-module github.com/monzim/uiuscraper
+module github.com/monzim/uiu-notice-scraper
 
 go 1.22.0
 
