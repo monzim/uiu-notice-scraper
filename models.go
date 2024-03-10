@@ -5,10 +5,15 @@ import "time"
 type Department string
 
 const (
-	DepartmentCSE Department = "BSCSE"
-	DepartmentEEE Department = "EEE"
-	DepartmentBBA Department = "BBA"
-	DepartmentAll Department = "ALL"
+	DepartmentAll      Department = "ALL"
+	DepartmentCSE      Department = "BSCSE"
+	DepartmentEEE      Department = "EEE"
+	DepartmentCivil    Department = "CE"
+	DepartmentPharmacy Department = "Pharmacy"
+	DepartmentEnglish  Department = "English"
+	DepartmentEDS      Department = "EDS"
+	DepartmentMSJ      Department = "MSJ"
+	DepartmentSoBE     Department = "SoBE"
 )
 
 type Notice struct {

@@ -20,14 +20,14 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 		lastId = *config.LastNoticeId
 	}
 
+	log.Info().Msgf("Scraping notices for department: %s", config.Department)
+
 	c := colly.NewCollector(colly.AllowedDomains(config.AllowDomain))
 	var notices []Notice
 	stopNextPage := false
 	page := 1
 
 	c.OnHTML("div[class=notice]", func(e *colly.HTMLElement) {
-		log.Info().Msg("Visiting Notice Item")
-
 		title := e.ChildText("div[class=title] a")
 		image := e.ChildAttr("div[class=image] img", "src")
 		date := e.ChildText("div[class=date-container] span[class=date]")
@@ -58,15 +58,17 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 		notices = append(notices, notice)
 	})
 
-	c.OnRequest(func(r *colly.Request) {
-		log.Info().Str("url", r.URL.String()).Msg("Visiting")
-	})
+	// c.OnRequest(func(r *colly.Request) {
+	// 	log.Info().Str("url", r.URL.String()).Msg("Visiting")
+	// })
 
 	c.OnHTML("div[class=nav-links]", func(e *colly.HTMLElement) {
-		log.Info().Int("page", page).Msg("Visiting Next Page")
+		log.Info().
+			Msgf("Scraping Department: %s, Page: %d", config.Department, page)
 		page++
 
 		if stopNextPage {
+			log.Info().Msg("Stopping Already have up to date notices")
 			return
 		}
 
@@ -84,6 +86,8 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 	if len(notices) == 0 {
 		log.Warn().Msgf("No notices found for department: %s", config.Department)
 	}
+
+	log.Info().Msgf("Scraped %d notices for department: %s", len(notices), config.Department)
 
 	return notices
 }

@@ -14,6 +14,8 @@ func TestScrapNotice(t *testing.T) {
 		{"UIU Notices", DepartmentAll, AllowDomainUIU, Notice_Site_UIU},
 		{"CSE Notices", DepartmentCSE, AllowDomainCSE, Notice_Site_CSE},
 		{"EEE Notices", DepartmentEEE, AllowDomainEEE, Notice_Site_EEE},
+		{"CE Notices", DepartmentCivil, AllowDomainCE, Notice_Site_CE},
+		{"Pharmacy Notices", DepartmentPharmacy, AllowDomainPharmacy, Notice_Site_Pharmacy},
 	}
 
 	for _, tc := range testCases {
