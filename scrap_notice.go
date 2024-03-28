@@ -1,7 +1,10 @@
 package uiuscraper
 
 import (
+	"fmt"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gocolly/colly"
 	"github.com/rs/zerolog/log"
@@ -45,6 +48,10 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 			return
 		}
 
+		if link[len(link)-1] == '/' {
+			link = link[:len(link)-1]
+		}
+
 		notice := Notice{
 			ID:         noticeID,
 			Title:      title,
@@ -56,11 +63,31 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 		}
 
 		notices = append(notices, notice)
+
+		linkWithTrack := fmt.Sprintf("%s?track_id=%s", link, noticeID)
+		c.Visit(linkWithTrack)
 	})
 
 	// c.OnRequest(func(r *colly.Request) {
 	// 	log.Info().Str("url", r.URL.String()).Msg("Visiting")
 	// })
+
+	c.OnHTML("div[class=notice-details]", func(e *colly.HTMLElement) {
+		summary := e.ChildText("p")
+		noticeID := e.Request.URL.Query().Get("track_id")
+
+		summary = removeExtraSpaces(summary)
+
+		// log.Info().Str("------>> notice_id", noticeID)
+
+		for i, notice := range notices {
+			if notice.ID == noticeID {
+				notices[i].Summary = summary
+				break
+			}
+		}
+
+	})
 
 	c.OnHTML("div[class=nav-links]", func(e *colly.HTMLElement) {
 		log.Info().
@@ -90,4 +117,18 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 	log.Info().Msgf("Scraped %d notices for department: %s", len(notices), config.Department)
 
 	return notices
+}
+
+func removeExtraSpaces(paragraph string) string {
+	paragraph = strings.Join(strings.Fields(paragraph), " ")
+
+	var result strings.Builder
+	var prev rune
+	for _, char := range paragraph {
+		if !unicode.IsSpace(prev) || !unicode.IsPunct(char) {
+			result.WriteRune(char)
+		}
+		prev = char
+	}
+	return result.String()
 }

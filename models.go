@@ -19,6 +19,7 @@ const (
 type Notice struct {
 	ID         string     `json:"id"`
 	Title      string     `json:"title"`
+	Summary    string     `json:"summary"`
 	Image      string     `json:"image"`
 	Date       time.Time  `json:"date"`
 	Link       string     `json:"link"`
