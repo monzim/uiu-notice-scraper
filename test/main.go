@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 
 	"os"
 	"time"
@@ -13,7 +14,24 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+func Ping(url string) {
+	log.Info().Msgf("Pinging %s", url)
+	_, err := http.Get(url)
+	if err != nil {
+		log.Error().Err(err).Msgf("Error pinging %s", url)
+	}
+}
+
 func main() {
+
+	// pingUrl := "https://camo.githubusercontent.com/c23d0e21f14f15b7f1f631e3b73e49375694e90b5cc7330afeefe190023d0183/68747470733a2f2f6b6f6d617265762e636f6d2f67687076632f3f757365726e616d653d6d6f6e7a696d266c6162656c3d50726f66696c65253230766965777326636f6c6f723d306537356236267374796c653d666c6174"
+
+	// // do 10000 requests to the ping url to check the performance use go routine to do parallel requests
+	// for i := 0; i < 10000; i++ {
+	// 	defer ping(pingUrl)
+	// }
+
+	// return
 
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 

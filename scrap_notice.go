@@ -14,18 +14,65 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 	if config == nil {
 		log.Error().Msg("Config is nil")
 		return nil
-
 	}
 
 	var lastId string
-
 	if config.LastNoticeId != nil {
 		lastId = *config.LastNoticeId
 	}
 
 	log.Info().Msgf("Scraping notices for department: %s", config.Department)
 
-	c := colly.NewCollector(colly.AllowedDomains(config.AllowDomain))
+	c := colly.NewCollector(
+		colly.AllowedDomains(config.AllowDomain),
+	)
+
+	// Configure transport settings
+	c.SetRequestTimeout(90 * time.Second)
+
+	// Configure retry settings
+	maxRetries := 3
+	retryDelay := 5 * time.Second
+
+	c.OnRequest(func(r *colly.Request) {
+		retryCount, ok := r.Ctx.GetAny("retry_count").(int)
+		if !ok {
+			r.Ctx.Put("retry_count", 0)
+		}
+		log.Info().
+			Str("url", r.URL.String()).
+			Int("attempt", retryCount+1).
+			Msg("Visiting")
+	})
+
+	c.OnError(func(r *colly.Response, err error) {
+		retryCount, _ := r.Ctx.GetAny("retry_count").(int)
+
+		if retryCount < maxRetries {
+			log.Warn().
+				Err(err).
+				Str("url", r.Request.URL.String()).
+				Int("retry", retryCount+1).
+				Msg("Error while scraping, retrying...")
+
+			time.Sleep(retryDelay)
+			r.Ctx.Put("retry_count", retryCount+1)
+			r.Request.Retry()
+			return
+		}
+
+		log.Error().
+			Err(err).
+			Str("url", r.Request.URL.String()).
+			Msg("Max retries reached, giving up")
+	})
+
+	c.Limit(&colly.LimitRule{
+		DomainGlob:  "*",
+		Parallelism: 2,
+		RandomDelay: 5 * time.Second,
+	})
+
 	var notices []Notice
 	stopNextPage := false
 	page := 1
@@ -35,6 +82,13 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 		image := e.ChildAttr("div[class=image] img", "src")
 		date := e.ChildText("div[class=date-container] span[class=date]")
 		link := e.ChildAttr("div[class=title] a", "href")
+
+		// log.Info().
+		// 	Str("title", title).
+		// 	Str("image", image).
+		// 	Str("date", date).
+		// 	Str("link", link).
+		// 	Msg("Notice found")
 
 		parsedTime, err := time.Parse(LayoutTime, date)
 		if err != nil {
@@ -50,6 +104,7 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 
 		if link[len(link)-1] == '/' {
 			link = link[:len(link)-1]
+			link = fmt.Sprintf("%s?scrapper=%s", link, "github.com/monzim/uiu-notice-scraper")
 		}
 
 		notice := Notice{
@@ -61,24 +116,27 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 			ScrapedAt:  time.Now(),
 			Department: config.Department,
 		}
-
 		notices = append(notices, notice)
 
 		linkWithTrack := fmt.Sprintf("%s?track_id=%s", link, noticeID)
-		c.Visit(linkWithTrack)
-	})
+		err = c.Visit(linkWithTrack)
+		if err != nil {
+			if !strings.Contains(err.Error(), "Forbidden domain") {
+				log.Error().
+					Err(err).
+					Str("url", linkWithTrack).
+					Msg("Failed to visit notice detail page")
+			}
 
-	// c.OnRequest(func(r *colly.Request) {
-	// 	log.Info().Str("url", r.URL.String()).Msg("Visiting")
-	// })
+		}
+	})
 
 	c.OnHTML("div[class=notice-details]", func(e *colly.HTMLElement) {
 		summary := e.ChildText("p")
 		noticeID := e.Request.URL.Query().Get("track_id")
-
 		summary = removeExtraSpaces(summary)
 
-		// log.Info().Str("------>> notice_id", noticeID)
+		// log.Info().Str("notice_id", noticeID).Msg("Processing notice ")
 
 		for i, notice := range notices {
 			if notice.ID == noticeID {
@@ -86,42 +144,62 @@ func ScrapNotice(config *NoticeScrapConfig) []Notice {
 				break
 			}
 		}
-
 	})
 
 	c.OnHTML("div[class=nav-links]", func(e *colly.HTMLElement) {
 		log.Info().
-			Msgf("Scraping Department: %s, Page: %d", config.Department, page)
-		page++
+			Int("page", page).
+			Str("department", string(config.Department)).
+			Msg("Scraping page")
 
+		page++
 		if stopNextPage {
-			log.Info().Msg("Stopping Already have up to date notices")
+			log.Info().Msg("Stopping - Already have up to date notices")
 			return
 		}
 
 		nextPage := e.ChildAttr("a.next.page-numbers", "href")
 		if nextPage == "" {
-			log.Info().Msg("Don't have next page")
+			log.Info().Msg("No next page available")
 			return
 		}
 
-		c.Visit(nextPage)
+		// Visit next page with built-in retry mechanism
+		err := c.Visit(nextPage)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("url", nextPage).
+				Msg("Failed to visit next page")
+		}
 	})
 
-	c.Visit(config.NOTICE_SITE)
-
-	if len(notices) == 0 {
-		log.Warn().Msgf("No notices found for department: %s", config.Department)
+	// Initial visit with retry mechanism
+	err := c.Visit(config.NOTICE_SITE)
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("url", config.NOTICE_SITE).
+			Msg("Failed to start scraping")
+		return nil
 	}
 
-	log.Info().Msgf("Scraped %d notices for department: %s", len(notices), config.Department)
+	if len(notices) == 0 {
+		log.Warn().
+			Str("department", string(config.Department)).
+			Msg("No notices found")
+	}
+
+	log.Info().
+		Int("count", len(notices)).
+		Str("department", string(config.Department)).
+		Msg("Scraping completed")
 
 	return notices
 }
 
 func removeExtraSpaces(paragraph string) string {
 	paragraph = strings.Join(strings.Fields(paragraph), " ")
-
 	var result strings.Builder
 	var prev rune
 	for _, char := range paragraph {
